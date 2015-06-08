@@ -9,7 +9,7 @@
 #define N 150
 #define SIZE (N+2)*(N+2)
 #define IX(i,j) (i+(N+2)*j)
-#define SWAP(array1, array2) {float *temp=array1; array1=array2; array2=temp;}
+#define SWAP(x0, x) {float *temp=x0; x0=x; x=temp;} // x0 is the cause, x is the effect
 
 #include <iostream>
 #include <GLUT/glut.h>
@@ -21,7 +21,7 @@ float dt = .1;
 float diff = .1;
 
 /**
- * this is to implement the force term
+ * This is to implement the force term
  * assume that the source for a given frame is provided in the array source[]
  * source[] is filled in by the mouse movement which detects source of density
  */
@@ -32,7 +32,7 @@ void addSource(float* cell, float* source, float dt) {
 }
 
 /**
- * set the boundary condition
+ * Set the boundary condition
  */
 void setBnd(int b,float* x){
 
@@ -62,8 +62,8 @@ void diffuse(int b, float* current, float* previous, float diff, float dt) {
 
 /**
  * This is to implement the advection term
- * @param current: current moument cell density
- * @param previous: previous moument cell density
+ * @param current: current moment cell density
+ * @param previous: previous moment cell density
  * @param u: the first coordinate of velocity field
  * @param v: the second coordinate of velocity field
  * @param dt: time interval
@@ -103,9 +103,24 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
 }
 
 /**
- * this is the routine to update density during a step of dt
+ * Update the density during a step of dt
+ * @param x0: the given force or source
+ * @param x: the density of the cell during a step of dt update, the effect result of source
+ * @param u: first component of velocity
+ * @param v: second component of velocity
  */
-void densStep(float *u, float *v, float diff, float dt) {
+void densStep(float *x, float *x0, float *u, float *v, float diff, float dt) {
+    addSource(x, x0, dt);
+    SWAP(x0, x); // now swap x0 and x, the effect becomes the cause
+    diffuse(0, x, x0, diff, dt);
+    SWAP(x0, x);
+    advect(0, x, x0, u, v, dt);
+}
+
+/**
+ * Update the velocity field during a step of dt
+ */
+void velStep() {
     
 }
 
