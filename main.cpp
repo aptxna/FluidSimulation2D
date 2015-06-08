@@ -21,6 +21,13 @@ float dt = .1;
 float diff = .1;
 
 /**
+ * Set the boundary condition
+ */
+void setBnd(int b,float* x){
+    
+}
+
+/**
  * This is to implement the force term
  * assume that the source for a given frame is provided in the array source[]
  * source[] is filled in by the mouse movement which detects source of density
@@ -29,13 +36,6 @@ void addSource(float* cell, float* source, float dt) {
     for (int i=0; i<SIZE; i++) {
         cell[i] += dt * source[i];
     }
-}
-
-/**
- * Set the boundary condition
- */
-void setBnd(int b,float* x){
-
 }
 
 /**
@@ -102,6 +102,10 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
     setBnd(b,current);
 }
 
+void project(float *u, float *v, float *p, float *div) {
+    
+}
+
 /**
  * Update the density during a step of dt
  * @param x0: the given force or source
@@ -119,9 +123,35 @@ void densStep(float *x, float *x0, float *u, float *v, float diff, float dt) {
 
 /**
  * Update the velocity field during a step of dt
+ * @param u0, v0: the given velocity field
+ * @param u, v: the velocity field during a step of dt update
+ * @param dt: time step interval
+ * @param visc: viscosity coefficient
  */
-void velStep() {
+void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
+    addSource(u, u0, dt);
+    addSource(v, v0, dt);
     
+    // update the velocity field
+    SWAP(u0, u);
+    SWAP(v0, v);
+    
+    diffuse(1, u, u0, visc, dt);
+    diffuse(2, v, v0, visc, dt);
+    
+    // make the velocity field divergence-free for next step
+    project(u, v, u0, v0);
+    
+    // update for next step
+    SWAP(u0, u);
+    SWAP(v0, v);
+    
+    // advection for the velocity field itself
+    advect(1, u, u0, u0, v0, dt);
+    advect(2, v, v0, u0, v0, dt);
+    
+    // make the velocity field divergence-free for next time step
+    project(u, v, u0, v0);
 }
 
 int main(int argc, const char * argv[]) {
