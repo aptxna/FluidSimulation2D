@@ -15,10 +15,17 @@
 #include <GLUT/glut.h>
 #include <math.h>
 
-static float* u;
-static float* v;
+static float *u;
+static float *v;
+static float *u_init;
+static float *v_init;
+static float **dens;
+static float **dens_init;
+float visc = 10;
 float dt = .1;
 float diff = .1;
+float xmult=3,ymult=3;
+int currentButton=0,currentColor=1;
 
 /**
  * Set the boundary condition
@@ -120,7 +127,7 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
  * Gauss-Seidel Relaxation is efficient to solve the equation
  * @param u,v: two components of the 2-dimension velocity field
  * Laplacian p = (...)/h^2 = Div u* = (...)/2h
- * multiply the h^2 to the right side of the equation to make simpler
+ * multiply the h^2 to the right side of the equation
  */
 void project(float *u, float *v) {
     float *p, *div; // p is the pressure, div is the divergence of u*
@@ -211,8 +218,75 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     project(u, v);
 }
 
-int main(int argc, const char * argv[]) {
-    // insert code here...
-    std::cout << "Hello, World!\n";
-    return 0;
+void display() {
+    
+}
+
+void reshape(int w,int h) {
+    glViewport(0,0,(GLsizei)w,(GLsizei)h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0,N,0,N,-1,1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    
+    xmult = w/(GLfloat)N;
+    ymult = h/(GLfloat)N;
+}
+
+void mouse(int bottom, int state, int x, int y) {
+    
+}
+
+void motion(int x, int y) {
+    
+}
+
+void render() {
+    velStep(u, v, u_init, v_init, visc, dt);
+    densStep(*dens, *dens_init, u, v, diff, dt);
+    glutPostRedisplay();
+}
+
+int main(int argc, char * argv[]) {
+    u = new float[SIZE];
+    v = new float[SIZE];
+    
+    u_init = new float[SIZE];
+    v_init = new float[SIZE];
+    
+    // initial the velocity field
+    for (int i=0; i<SIZE; i++) {
+        u[i] = 0;
+        v[i] = 0;
+        u_init[i] = 0;
+        v_init[i] = 0;
+    }
+    
+    // GLUT
+    glutInit(&argc,argv);
+    glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB);
+    glutInitWindowSize(800,800);
+    glutInitWindowPosition(100,100);
+    
+    glutCreateWindow("Fluid Simulation 2D");
+    glClearColor(0,0,0,0);
+    glShadeModel(GL_FLAT);
+    glOrtho(0,N,0,N,-1,1);
+    
+    // call back for main window
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+    
+    glutMouseFunc(mouse);
+    glutMotionFunc(motion);
+    
+    glutIdleFunc(render);
+    glutMainLoop();
+    
+    
+    free(u);
+    free(v);
+    free(u_init);
+    free(v_init);
 }
