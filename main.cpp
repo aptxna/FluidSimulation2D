@@ -6,10 +6,10 @@
 //  Copyright (c) 2015 na. All rights reserved.         //
 //////////////////////////////////////////////////////////
 
-#define N 192
-#define SIZE (N+2)*(N+2)
+#define N 192 // the resolution size of grid
+#define SIZE (N+2)*(N+2) // the size of grid
 #define IX(i,j) (i+(N+2)*j) // index of the float array, i and j are the horizontal and vertical component in Cartesian coordinates
-#define SWAP(x0, x) {float *temp=x0; x0=x; x=temp;} // x0 is the cause, x is the effect
+#define SWAP(x0,x) {float *temp=x0; x0=x; x=temp;} // x0 is the cause, x is the effect
 
 #include <iostream>
 #include <GLUT/glut.h>
@@ -65,8 +65,8 @@ void diffuse(int b, float* current, float* previous, float diff, float dt) {
     for (int k=0; k<20; k++) {
         for (int i=1; i<=N; i++) {
             for (int j=1; j<=N; j++) {
-                current[IX(i,j)] = (previous[IX(i,j)] + a*(current[IX(i-1,j)] + current[IX(i+1,j)]
-                                                        + current[IX(i,j-1)] + current[IX(i,j+1)]))/(1+4*a);
+                current[IX(i, j)] = (previous[IX(i, j)] + a*(current[IX(i-1, j)] + current[IX(i+1, j)]
+                                                        + current[IX(i, j-1)] + current[IX(i, j+1)])) / (1 + 4 * a);
             }
         }
     }
@@ -107,7 +107,7 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
             float t1 = y - j0;
             
             // bilinear interpolation
-            current[IX(i,j)] = s0 * (t0 * previous[IX(i0, j0)] + t1 * previous[IX(i0, j1)]) +
+            current[IX(i, j)] = s0 * (t0 * previous[IX(i0, j0)] + t1 * previous[IX(i0, j1)]) +
                                 s1 * (t0 * previous[IX(i1, j0)] + t1 * previous[IX(i1, j1)]);
         }
     }
@@ -118,9 +118,49 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
 /**
  * Here we have to solve a possion equation which leads to a sparse linear system for the unknow field
  * Gauss-Seidel Relaxation is efficient to solve the equation
+ * @param u,v: two components of the 2-dimension velocity field
+ * Laplacian p = (...)/h^2 = Div u* = (...)/2h
+ * multiply the h^2 to the right side of the equation to make simpler
  */
-void project(float *u, float *v, float *p, float *div) {
+void project(float *u, float *v) {
+    float *p, *div; // p is the pressure, div is the divergence of u*
+    float h = 1.0/N;
     
+    // get the divergence of u*
+    for (int i=1; i<=N; i++) {
+        for (int j=1; j<=N; j++) {
+            div[IX(i, j)] = 0.5 * h * (u[IX(i+1, j)] - u[IX(i-1, j)] + v[IX(i, j+1)] - v[IX(i, j-1)]);
+            p[IX(i, j)] = 0;
+        }
+    }
+    
+    // set the divergence and pressure on boundary, should be the same with the nearest fluid cell, so we let b=0
+    setBnd(0, div);
+    setBnd(0, p);
+    
+    // Gauss-Seidel Relaxation, solve the poisson equation to get the pressure term
+    for (int k=0; k<20; k++) {
+        for (int i=1; i<=N; i++) {
+            for (int j=1; j<=N; j++) {
+                p[IX(i, j)] = (p[IX(i-1, j)] + p[IX(i+1, j)] + p[IX(i, j-1)] + p[IX(i, j+1)] - div[IX(i, j)]) / 4;
+            }
+        }
+        setBnd(0, p);
+    }
+    
+    // since we got the pressure term frome above
+    // then replace it in the equation to solve the next time step divergence-free velocity field
+    // u^{n+1} = u* - grad p
+    for (int i=1; i<=N; i++) {
+        for (int j=1; j<=N; j++) {
+            u[IX(i, j)] -= 0.5 * (p[IX(i+1, j)] - p[IX(i-1, j)]) / h;
+            v[IX(i, j)] -= 0.5 * (p[IX(i, j+1)] - p[IX(i, j-1)]) / h;
+        }
+    }
+    
+    // set the boundary condition
+    setBnd(1, u);
+    setBnd(2, v);
 }
 
 /**
@@ -157,7 +197,7 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     diffuse(2, v, v0, visc, dt);
     
     // make the velocity field divergence-free for next step
-    project(u, v, u0, v0);
+    project(u, v);
     
     // update for next step
     SWAP(u0, u);
@@ -168,7 +208,7 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     advect(2, v, v0, u0, v0, dt);
     
     // make the velocity field divergence-free for next time step
-    project(u, v, u0, v0);
+    project(u, v);
 }
 
 int main(int argc, const char * argv[]) {
