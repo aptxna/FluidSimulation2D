@@ -6,9 +6,9 @@
 //  Copyright (c) 2015 na. All rights reserved.         //
 //////////////////////////////////////////////////////////
 
-#define N 150
+#define N 192
 #define SIZE (N+2)*(N+2)
-#define IX(i,j) (i+(N+2)*j)
+#define IX(i,j) (i+(N+2)*j) // index of the float array, i and j are the horizontal and vertical component in Cartesian coordinates
 #define SWAP(x0, x) {float *temp=x0; x0=x; x=temp;} // x0 is the cause, x is the effect
 
 #include <iostream>
@@ -22,9 +22,22 @@ float diff = .1;
 
 /**
  * Set the boundary condition
+ * @param b: b=1 horizontal component of velocity on the vertical wall
+ *           b=2 vertical component of velocity on the horizontal wall
+ * @param var: density or velocity or pressure array
  */
-void setBnd(int b,float* x){
+void setBnd(int b,float* var){
+    for (int i=1; i<=N; i++) {
+        var[IX(0, i)] = b == 1 ? -var[IX(1, i)] : var[IX(1, i)];
+        var[IX(N+1, i)] = b == 1 ? -var[IX(N, i)] : var[IX(N, i)];
+        var[IX(i, 0)] = b == 2 ? -var[IX(i, 1)] : var[IX(i, 1)];
+        var[IX(i, N+1)] = b == 2 ? -var[IX(i, N)] : var[IX(i, N)];
+    }
     
+    var[IX(0, 0)] = 0.5 * (var[IX(1, 0)] + var[IX(0, 1)]);
+    var[IX(0, N+1)] = 0.5 * (var[IX(1, N+1)] + var[IX(0, N)]);
+    var[IX(N+1, 0)] = 0.5 * (var[IX(N, 0)] + var[IX(N+1, 1)]);
+    var[IX(N+1, N+1)] = 0.5 *(var[IX(N, N+1)] + var[IX(N+1, N)]);
 }
 
 /**
@@ -102,6 +115,10 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
     setBnd(b,current);
 }
 
+/**
+ * Here we have to solve a possion equation which leads to a sparse linear system for the unknow field
+ * Gauss-Seidel Relaxation is efficient to solve the equation
+ */
 void project(float *u, float *v, float *p, float *div) {
     
 }
