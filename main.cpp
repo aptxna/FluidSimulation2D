@@ -6,22 +6,26 @@
 //  Copyright (c) 2015 na. All rights reserved.         //
 //////////////////////////////////////////////////////////
 
-#define N 150 // the resolution size of grid
-#define SIZE (N+2)*(N+2) // the size of grid
-#define IX(i,j) (i+(N+2)*j) // index of the float array, i and j are the horizontal and vertical component in Cartesian coordinates
-#define SWAP(x0,x) {float *temp=x0; x0=x; x=temp;} // x0 is the cause, x is the effect
+
 
 #include <iostream>
-#include <GLUT/glut.h>
+#include <GLUT/GLUT.h>
 #include <math.h>
 using namespace std;
 
-static float *u;
-static float *v;
-static float *u_init;
-static float *v_init;
-static float *dens[3];
-static float *dens_init[3];
+#define N 128 // the resolution size of grid
+#define M_SIZE (N+2)*(N+2) // the size of grid
+#define IX(i,j) ((i)+(N+2)*(j)) // index of the float array, i and j are the horizontal and vertical component in Cartesian coordinates
+#define SWAP(x0,x) {float *temp=x0; x0=x; x=temp;} // x0 is the cause, x is the effect
+
+float *u;
+float *v;
+float *u_init;
+float *v_init;
+float *fx;
+float *fy;
+float *dens[3];
+float *dens_init[3];
 float visc = 10;
 float dt = 0.1;
 float diff = 0.1;
@@ -54,7 +58,7 @@ void setBnd(int b,float* var){
  * source[] is filled in by the mouse movement which detects source of density
  */
 void addSource(float* cell, float* source, float dt) {
-    for (int i=0; i<SIZE; i++) {
+    for (int i=0; i<M_SIZE; i++) {
         cell[i] += dt * source[i];
     }
 }
@@ -75,7 +79,7 @@ void diffuse(int b, float* current, float* previous, float diff, float dt) {
         for (int i=1; i<=N; i++) {
             for (int j=1; j<=N; j++) {
                 current[IX(i, j)] = (previous[IX(i, j)] + a*(current[IX(i-1, j)] + current[IX(i+1, j)]
-                                                        + current[IX(i, j-1)] + current[IX(i, j+1)])) / (1 + 4 * a);
+                                                             + current[IX(i, j-1)] + current[IX(i, j+1)])) / (1 + 4 * a);
             }
         }
     }
@@ -92,13 +96,17 @@ void diffuse(int b, float* current, float* previous, float diff, float dt) {
  * @param dt: time interval
  * use Bilinear interpolation
  */
+float lerp(float a, float b, float t)
+{
+    return (1-t)*a + t*b;
+}
 void advect(int b,float* current,float* previous,float* u,float* v,float dt){
-    float dt0 = dt*N;
+    float dt0 = dt*(float)N;
     
     for (int i=1; i<=N; i++) {
         for (int j=1; j<=N; j++) {
-            float x = i - dt0 * u[IX(i,j)];
-            float y = j - dt0 * v[IX(i,j)];
+            float x = (float)i - dt0 * u[IX(i,j)];
+            float y = (float)j - dt0 * v[IX(i,j)];
             
             // make sure not to flow out the boundary
             if (x < 0.5) x = 0.5;
@@ -108,24 +116,38 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
             
             // get the nearest four neighbors
             int i0 = (int)x;
-            int i1 = i0 + 1;
+            // int i1 = i0 + 1;
             int j0 = (int)y;
-            int j1 = j0 + 1;
+            // int j1 = j0 + 1;
             
             // get the four coefficient in bilinear interpolation
             /*float s0 = i1 - x;
-            float s1 = x - i0;
-            float t0 = j1 - y;
-            float t1 = y - j0;*/
+             float s1 = x - i0;
+             float t0 = j1 - y;
+             float t1 = y - j0;*/
             
-            float s1 = x - i0;
-            float s0 = 1 - s1;
-            float t1 = y - j0;
-            float t0 = 1 - t1;
+            //float s1 = x - i0;
+            //float s0 = 1 - s1;
+            //float t1 = y - j0;
+            //float t0 = 1 - t1;
+            //
+            //// bilinear interpolation
+            //current[IX(i, j)] = s0 * (t0 * previous[IX(i0, j0)] + t1 * previous[IX(i0, j1)]) +
+            //                    s1 * (t0 * previous[IX(i1, j0)] + t1 * previous[IX(i1, j1)]);
             
-            // bilinear interpolation
-            current[IX(i, j)] = s0 * (t0 * previous[IX(i0, j0)] + t1 * previous[IX(i0, j1)]) +
-                                s1 * (t0 * previous[IX(i1, j0)] + t1 * previous[IX(i1, j1)]);
+            
+            float cx = x - i0;
+            float cy = y - j0;
+            float v00 = previous[IX(i0,j0)];
+            float v01 = previous[IX(i0+1,j0)];
+            float v10 = previous[IX(i0,j0+1)];
+            float v11 = previous[IX(i0+1,j0+1)];
+            
+            
+            current[IX(i,j)] = 0.99*lerp(lerp(v00,v01,cx),
+                                         lerp(v10,v11,cx),
+                                         cy);
+            
         }
     }
     
@@ -141,7 +163,7 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
  */
 void project(float *u, float *v, float *p, float *div) {
     int i, j, k;
-    float h = 1.0/N;
+    float h = 1.0/(float)N;
     
     // get the divergence of u*
     for (i=1; i<=N; i++) {
@@ -156,10 +178,10 @@ void project(float *u, float *v, float *p, float *div) {
     setBnd(0, p);
     
     // Gauss-Seidel Relaxation, solve the poisson equation to get the pressure term
-    for (k=0; k<20; k++) {
+    for (k=0; k<200; k++) {
         for (i=1; i<=N; i++) {
             for (j=1; j<=N; j++) {
-                p[IX(i, j)] = (p[IX(i-1, j)] + p[IX(i+1, j)] + p[IX(i, j-1)] + p[IX(i, j+1)] - div[IX(i, j)]) / 4;
+                p[IX(i, j)] = (p[IX(i-1, j)] + p[IX(i+1, j)] + p[IX(i, j-1)] + p[IX(i, j+1)] - div[IX(i, j)]) / 4.0;
             }
         }
         setBnd(0, p);
@@ -190,12 +212,13 @@ void project(float *u, float *v, float *p, float *div) {
 void densStep(float* x[],float* x0[],float* u,float* v,float diff,float dt){
     int m;
     for(m=0;m<3;m++){
-        addSource(x[m],x0[m],dt);
-        SWAP(x0[m],x[m]);
-        diffuse(0,x[m],x0[m],diff,dt);
-        SWAP(x0[m],x[m]);
+        
+        /* diffuse(0,x[m],x0[m],diff,dt);
+         SWAP(x0[m],x[m]);*/
         advect(0,x[m],x0[m],u,v,dt);
+        SWAP(x0[m],x[m]);
     }
+    
 }
 
 /**
@@ -206,29 +229,40 @@ void densStep(float* x[],float* x0[],float* u,float* v,float diff,float dt){
  * @param visc: viscosity coefficient
  */
 void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
-    addSource(u, u0, dt);
-    addSource(v, v0, dt);
     
-    // update the velocity field
-    SWAP(u0, u);
-    SWAP(v0, v);
     
-    diffuse(1, u, u0, visc, dt);
-    diffuse(2, v, v0, visc, dt);
+    //// update the velocity field
+    //SWAP(u0, u);
+    //SWAP(v0, v);
+    //
+    //diffuse(1, u, u0, visc, dt);
+    //diffuse(2, v, v0, visc, dt);
+    //
+    //// make the velocity field divergence-free for next step
+    //project(u, v, u0, v0);
     
-    // make the velocity field divergence-free for next step
-    project(u, v, u0, v0);
     
-    // update for next step
-    SWAP(u0, u);
-    SWAP(v0, v);
-    
+    memset(u, sizeof(float)*M_SIZE, 0);
+    memset(v, sizeof(float)*M_SIZE, 0);
     // advection for the velocity field itself
     advect(1, u, u0, u0, v0, dt);
     advect(2, v, v0, u0, v0, dt);
     
+    //addSource(u, fx, dt);
+    //addSource(v, fy, dt);
+    //memset(fx, sizeof(float)*M_SIZE, 0);
+    //memset(fy, sizeof(float)*M_SIZE, 0);
+    
     // make the velocity field divergence-free for next time step
     project(u, v, u0, v0);
+    // update for next step
+    //SWAP(u0, u);
+    //SWAP(v0, v);
+    memcpy(u0,u, sizeof(float)*M_SIZE);
+    memcpy(v0,v, sizeof(float)*M_SIZE);
+    
+    
+    
 }
 
 
@@ -242,13 +276,15 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
  **********************************************************************************************/
 
 void draw_dens(void){
+    velStep(u,v,u_init,v_init,visc,dt);
+    densStep(dens,dens_init,u_init,v_init,diff,dt);
     int x,y,m;
     float c[3];
     glClear(GL_COLOR_BUFFER_BIT);
     
     for(y=0;y<=N;y++){
         for(x=0;x<=N;x++){
-            for(m=0;m<3;m++) c[m] = dens[m][IX(x,y)]/255.0;
+            for(m=0;m<3;m++) c[m] = dens_init[m][IX(x,y)]/255.0;
             if(c[0]==0 && c[1]==0 && c[2]==0) continue;
             glColor3f(c[0],c[1],c[2]);
             
@@ -256,6 +292,7 @@ void draw_dens(void){
         }
     }
     glutSwapBuffers();
+    glutPostRedisplay();
 }
 
 void reshape(int w,int h){
@@ -270,7 +307,9 @@ void reshape(int w,int h){
     ymult = h/(GLfloat)N;
 }
 
-
+int mouseButtons;
+int mouseOldX;
+int mouseOldY;
 /**********************************************************************************************
  *                                                                                            *
  *                                                                                            *
@@ -280,90 +319,74 @@ void reshape(int w,int h){
  **********************************************************************************************/
 
 void mouse(int button,int state,int x,int y){
-    int i,j,m,newx=x/xmult,newy=y/ymult;
-    switch(button){
-        case GLUT_LEFT_BUTTON:
-            if(state==GLUT_DOWN){
-                currentButton=1;
-                for(i=(newx-5>=0?newx-5:0); i<newx+5 && i<=N; i++){
-                    for(j=(newy-5>=0?newy-5:0); j<newy+5 && j<=N; j++){
-                        dens_init[currentColor][IX(i,j)] = 255.0;
-                    }
-                }
-                glutPostRedisplay();
-            }
-            else{
-                currentButton=0;
-                currentColor = (currentColor+1)%3;
-            }
-            break;
-        case GLUT_RIGHT_BUTTON:
-            if(state==GLUT_DOWN){
-                currentButton=2;
-                for(i=(newx-5>=0?newx-5:0); i<newx+5 && i<=N; i++){
-                    for(j=(newy-5>=0?newy-5:0); j<newy+5 && j<=N; j++){
-                        for(m=0;m<3;m++) dens_init[m][IX(i,j)] = 0.0;
-                    }
-                }
-                glutPostRedisplay();
-            }
-            else currentButton=0;
-            break;
-        case GLUT_MIDDLE_BUTTON:
-            if(state==GLUT_DOWN){
-                currentButton=3;
-                for(i=0;i<=N;i++){
-                    for(j=0;j<=N;j++){
-                        u_init[IX(i,j)] += 10.0;
-                        v_init[IX(i,j)] += 10.0;
-                    }
-                }
-                glutPostRedisplay();
-            }
-            else currentButton=0;
-            break;
-        default:
-            break;
+    if (state == GLUT_DOWN)
+    {
+        mouseButtons |= 1<<button;
     }
+    else if (state == GLUT_UP)
+    {
+        mouseButtons = 0;
+    }
+    
+    mouseOldX = x;
+    mouseOldY = y;
+    glutPostRedisplay();
 }
 
 void mouseMove(int x,int y){
-    int i,j,m,newx=x/xmult,newy=y/ymult;
-    if(currentButton==3){
-        for(i=0;i<=N;i++){
-            for(j=0;j<=N;j++){
-                v_init[IX(i,j)] = 10;
+    float dx, dy;
+    dx = (float)(x - mouseOldX);
+    dy = (float)(y - mouseOldY);
+    
+    if (mouseButtons == 1)
+    {
+        float coordx = x/500.0;
+        float coordy = y/500.0;
+        int buffer_i = coordx * N;
+        int buffer_j = coordy * N;
+        printf("%d,%d\n", buffer_i,buffer_j);
+        for (int ii=max(buffer_i-3,1);ii<=min(buffer_i+3,N);ii++)
+            for (int jj=max(buffer_j-3,1);jj<=min(buffer_j+3,N);jj++)
+            {
+                dens_init[0][IX(ii,jj)] = rand()%256;
+                dens_init[1][IX(ii,jj)] = rand()%256;
+                dens_init[2][IX(ii,jj)] = rand()%256;
+                u_init[IX(ii,jj)] += dt*0.5*dx;
+                v_init[IX(ii,jj)] += dt*0.5*dy;
             }
-        }
+        glutPostRedisplay();
     }
-    else{
-        for(i=(newx-5>=0?newx-5:0); i<newx+5 && i<=N; i++){
-            for(j=(newy-5>=0?newy-5:0); j<newy+5 && j<=N; j++){
-                if(currentButton==1) dens_init[currentColor][IX(i,j)] = 255.0;
-                else if(currentButton==2) for(m=0;m<3;m++) dens_init[m][IX(i,j)] = 0.0;
-            }
-        }
+    else
+    {
+        memset(fx, sizeof(float)*M_SIZE, 0);
+        memset(fy, sizeof(float)*M_SIZE, 0);
+        glutPostRedisplay();
     }
-    glutPostRedisplay();
+    
+    mouseOldX = x;
+    mouseOldY = y;
+    
 }
 
 void fluidMainLoop(void){
     velStep(u,v,u_init,v_init,visc,dt);
-    densStep(dens,dens_init,u,v,diff,dt);
-    glutPostRedisplay();
+    densStep(dens,dens_init,u_init,v_init,diff,dt);
+    
 }
 
 int main(int argc, char* argv[]){
     int i, j;
     
-    u = new float[SIZE];
-    v = new float[SIZE];
-    u_init = new float[SIZE];
-    v_init = new float[SIZE];
+    u = new float[M_SIZE];
+    v = new float[M_SIZE];
+    fx= new float[M_SIZE];
+    fy= new float[M_SIZE];
+    u_init = new float[M_SIZE];
+    v_init = new float[M_SIZE];
     
     for(j=0;j<3;j++){
-        dens[j] = new float[SIZE];
-        dens_init[j] = new float[SIZE];
+        dens[j] = new float[M_SIZE];
+        dens_init[j] = new float[M_SIZE];
     }
     
     if(dens[0]==NULL || dens[1]==NULL || dens[2]==NULL || dens_init[0]==NULL || dens_init[1]==NULL || dens_init[2]==NULL) {
@@ -371,7 +394,7 @@ int main(int argc, char* argv[]){
         exit(1);
     }
     
-    for(i=0;i<SIZE;i++){
+    for(i=0;i<M_SIZE;i++){
         u[i] = 0.0;
         v[i] = 0.0;
         u_init[i] = 0.0;
@@ -395,7 +418,6 @@ int main(int argc, char* argv[]){
     glutReshapeFunc(reshape);
     glutMouseFunc(mouse);
     glutMotionFunc(mouseMove);
-    glutIdleFunc(fluidMainLoop);
     glutMainLoop();
     
     
