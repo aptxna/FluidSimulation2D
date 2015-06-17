@@ -144,6 +144,8 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
             float v11 = previous[IX(i0+1,j0+1)];
             
             
+            // multiply 0.99 is to decay the velocity and density
+            // otherwise the screen will full of fluid and add more as the mouse move
             current[IX(i,j)] = 0.99*lerp(lerp(v00,v01,cx),
                                          lerp(v10,v11,cx),
                                          cy);
