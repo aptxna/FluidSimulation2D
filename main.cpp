@@ -100,6 +100,7 @@ float lerp(float a, float b, float t)
 {
     return (1-t)*a + t*b;
 }
+
 void advect(int b,float* current,float* previous,float* u,float* v,float dt){
     float dt0 = dt*(float)N;
     
@@ -211,16 +212,16 @@ void project(float *u, float *v, float *p, float *div) {
  * @param u: first component of velocity
  * @param v: second component of velocity
  */
-void densStep(float* x[],float* x0[],float* u,float* v,float diff,float dt){
-    int m;
-    for(m=0;m<3;m++){
-        
-        /* diffuse(0,x[m],x0[m],diff,dt);
-         SWAP(x0[m],x[m]);*/
-        advect(0,x[m],x0[m],u,v,dt);
-        SWAP(x0[m],x[m]);
-    }
+void densStep(float* x[], float* x0[], float* u, float* v, float diff, float dt) {
     
+    for (int m=0; m<3; m++) {
+        
+        //diffuse(0,x[m],x0[m],diff,dt);
+        //SWAP(x0[m],x[m]);
+        
+        advect(0, x[m], x0[m], u, v, dt);
+        SWAP(x0[m], x[m]);
+    }
 }
 
 /**
@@ -232,7 +233,6 @@ void densStep(float* x[],float* x0[],float* u,float* v,float diff,float dt){
  */
 void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     
-    
     //// update the velocity field
     //SWAP(u0, u);
     //SWAP(v0, v);
@@ -243,9 +243,9 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     //// make the velocity field divergence-free for next step
     //project(u, v, u0, v0);
     
-    
     memset(u, sizeof(float)*M_SIZE, 0);
     memset(v, sizeof(float)*M_SIZE, 0);
+    
     // advection for the velocity field itself
     advect(1, u, u0, u0, v0, dt);
     advect(2, v, v0, u0, v0, dt);
@@ -257,14 +257,13 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     
     // make the velocity field divergence-free for next time step
     project(u, v, u0, v0);
+    
     // update for next step
     //SWAP(u0, u);
     //SWAP(v0, v);
-    memcpy(u0,u, sizeof(float)*M_SIZE);
-    memcpy(v0,v, sizeof(float)*M_SIZE);
     
-    
-    
+    memcpy(u0, u, sizeof(float)*M_SIZE);
+    memcpy(v0, v, sizeof(float)*M_SIZE);
 }
 
 
@@ -277,31 +276,44 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
  *                                                                                            *
  **********************************************************************************************/
 
-void draw_dens(void){
-    velStep(u,v,u_init,v_init,visc,dt);
-    densStep(dens,dens_init,u_init,v_init,diff,dt);
-    int x,y,m;
+void fluidMainLoop(void) {
+    velStep(u, v, u_init, v_init, visc, dt);
+    densStep(dens, dens_init, u_init, v_init, diff, dt);
+}
+
+void draw_dens(void) {
+    // solve fluid
+    fluidMainLoop();
+    
+    // draw function
     float c[3];
     glClear(GL_COLOR_BUFFER_BIT);
     
-    for(y=0;y<=N;y++){
-        for(x=0;x<=N;x++){
-            for(m=0;m<3;m++) c[m] = dens_init[m][IX(x,y)]/255.0;
-            if(c[0]==0 && c[1]==0 && c[2]==0) continue;
-            glColor3f(c[0],c[1],c[2]);
+    for (int y=0; y<=N; y++) {
+        for (int x=0; x<=N; x++) {
+            // display color of density
+            for (int m=0; m<3; m++) {
+                c[m] = dens_init[m][IX(x,y)]/255.0;
+            }
             
-            glRecti(x,N-y,x+1,N-y+1);
+            if(c[0]==0 && c[1]==0 && c[2]==0) continue; // do not draw black color
+            
+            glColor3f(c[0], c[1], c[2]);
+            glRecti(x, N-y, x+1, N-y+1);
         }
     }
+    
     glutSwapBuffers();
     glutPostRedisplay();
 }
 
-void reshape(int w,int h){
-    glViewport(0,0,(GLsizei)w,(GLsizei)h);
+void reshape(int w,int h) {
+    
+    glViewport(0, 0, (GLsizei)w, (GLsizei)h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0,N,0,N,-1,1);
+    
+    glOrtho(0, N, 0, N, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     
@@ -309,9 +321,8 @@ void reshape(int w,int h){
     ymult = h/(GLfloat)N;
 }
 
-int mouseButtons;
-int mouseOldX;
-int mouseOldY;
+
+
 /**********************************************************************************************
  *                                                                                            *
  *                                                                                            *
@@ -320,46 +331,55 @@ int mouseOldY;
  *                                                                                            *
  **********************************************************************************************/
 
-void mouse(int button,int state,int x,int y){
-    if (state == GLUT_DOWN)
-    {
+int mouseButtons;
+int mouseOldX;
+int mouseOldY;
+
+// detect the state of mouse
+void mouse(int button,int state,int x,int y) {
+    if (state == GLUT_DOWN) {
         mouseButtons |= 1<<button;
     }
-    else if (state == GLUT_UP)
-    {
+    else if (state == GLUT_UP) {
         mouseButtons = 0;
     }
     
     mouseOldX = x;
     mouseOldY = y;
+    
     glutPostRedisplay();
 }
 
-void mouseMove(int x,int y){
-    float dx, dy;
-    dx = (float)(x - mouseOldX);
-    dy = (float)(y - mouseOldY);
+// decide the action when mouse move
+void mouseMove(int x,int y) {
+    float dx = (float)(x - mouseOldX);
+    float dy = (float)(y - mouseOldY);
     
-    if (mouseButtons == 1)
-    {
+    if (mouseButtons == 1) {
         float coordx = x/500.0;
         float coordy = y/500.0;
+        
         int buffer_i = coordx * N;
         int buffer_j = coordy * N;
+        
         printf("%d,%d\n", buffer_i,buffer_j);
-        for (int ii=max(buffer_i-3,1);ii<=min(buffer_i+3,N);ii++)
-            for (int jj=max(buffer_j-3,1);jj<=min(buffer_j+3,N);jj++)
-            {
+        
+        for (int ii = max(buffer_i-3, 1); ii <= min(buffer_i+3, N); ii++) {
+            for (int jj = max(buffer_j-3,1); jj <= min(buffer_j+3,N); jj++) {
+                // set the color to the position where mouse button is click down
                 dens_init[0][IX(ii,jj)] = rand()%256;
                 dens_init[1][IX(ii,jj)] = rand()%256;
                 dens_init[2][IX(ii,jj)] = rand()%256;
+                
+                // add force to the position to the direction where mouse move
                 u_init[IX(ii,jj)] += dt*0.5*dx;
                 v_init[IX(ii,jj)] += dt*0.5*dy;
             }
+        }
+        
         glutPostRedisplay();
     }
-    else
-    {
+    else {
         memset(fx, sizeof(float)*M_SIZE, 0);
         memset(fy, sizeof(float)*M_SIZE, 0);
         glutPostRedisplay();
@@ -367,41 +387,35 @@ void mouseMove(int x,int y){
     
     mouseOldX = x;
     mouseOldY = y;
-    
 }
 
-void fluidMainLoop(void){
-    velStep(u,v,u_init,v_init,visc,dt);
-    densStep(dens,dens_init,u_init,v_init,diff,dt);
-    
-}
-
-int main(int argc, char* argv[]){
+int main(int argc, char* argv[]) {
     int i, j;
     
     u = new float[M_SIZE];
     v = new float[M_SIZE];
-    fx= new float[M_SIZE];
-    fy= new float[M_SIZE];
+    fx = new float[M_SIZE];
+    fy = new float[M_SIZE];
     u_init = new float[M_SIZE];
     v_init = new float[M_SIZE];
     
-    for(j=0;j<3;j++){
+    for (j=0;j<3;j++) {
         dens[j] = new float[M_SIZE];
         dens_init[j] = new float[M_SIZE];
     }
     
-    if(dens[0]==NULL || dens[1]==NULL || dens[2]==NULL || dens_init[0]==NULL || dens_init[1]==NULL || dens_init[2]==NULL) {
+    if (dens[0]==NULL || dens[1]==NULL || dens[2]==NULL || dens_init[0]==NULL || dens_init[1]==NULL || dens_init[2]==NULL) {
         cout << "Memory Allocation Failure.";
         exit(1);
     }
     
-    for(i=0;i<M_SIZE;i++){
+    for (i=0; i<M_SIZE; i++) {
         u[i] = 0.0;
         v[i] = 0.0;
         u_init[i] = 0.0;
         v_init[i] = 0.0;
-        for(j=0;j<3;j++){
+        
+        for (j=0; j<3; j++) {
             dens[j][i] = 0.0;
             dens_init[j][i] = 0.0;
         }
