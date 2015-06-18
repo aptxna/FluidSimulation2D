@@ -32,12 +32,16 @@ float diff = 0.1;
 float xmult=3,ymult=3;
 int currentButton=0,currentColor=1;
 
+
+
+
 /**
  * Set the boundary condition
  * @param b: b=1 horizontal component of velocity on the vertical wall
  *           b=2 vertical component of velocity on the horizontal wall
  * @param var: density or velocity or pressure array
  */
+
 void setBnd(int b,float* var){
     for (int i=1; i<=N; i++) {
         var[IX(0, i)] = b == 1 ? -var[IX(1, i)] : var[IX(1, i)];
@@ -52,16 +56,29 @@ void setBnd(int b,float* var){
     var[IX(N+1, N+1)] = 0.5 *(var[IX(N, N+1)] + var[IX(N+1, N)]);
 }
 
+
+
+
+
+
+
 /**
  * This is to implement the force term
  * assume that the source for a given frame is provided in the array source[]
  * source[] is filled in by the mouse movement which detects source of density
  */
+
 void addSource(float* cell, float* source, float dt) {
     for (int i=0; i<M_SIZE; i++) {
         cell[i] += dt * source[i];
     }
 }
+
+
+
+
+
+
 
 /**
  * This is to implement the diffusion term
@@ -72,6 +89,7 @@ void addSource(float* cell, float* source, float dt) {
  * use Gauss-Seidel Relaxation
  * iteration times: k=20
  */
+
 void diffuse(int b, float* current, float* previous, float diff, float dt) {
     float a = dt * diff * N * N;
     
@@ -79,13 +97,19 @@ void diffuse(int b, float* current, float* previous, float diff, float dt) {
         for (int i=1; i<=N; i++) {
             for (int j=1; j<=N; j++) {
                 current[IX(i, j)] = (previous[IX(i, j)] + a*(current[IX(i-1, j)] + current[IX(i+1, j)]
-                                                             + current[IX(i, j-1)] + current[IX(i, j+1)])) / (1 + 4 * a);
+                                                           + current[IX(i, j-1)] + current[IX(i, j+1)])) / (1 + 4 * a);
             }
         }
     }
     
     setBnd(b,current);
 }
+
+
+
+
+
+
 
 /**
  * This is to implement the advection term
@@ -95,7 +119,9 @@ void diffuse(int b, float* current, float* previous, float diff, float dt) {
  * @param v: the second coordinate of velocity field
  * @param dt: time interval
  * use Bilinear interpolation
+ * lerp is the linear interpolation function
  */
+
 float lerp(float a, float b, float t)
 {
     return (1-t)*a + t*b;
@@ -157,6 +183,12 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
     setBnd(b,current);
 }
 
+
+
+
+
+
+
 /**
  * Here we have to solve a possion equation which leads to a sparse linear system for the unknow field
  * Gauss-Seidel Relaxation is efficient to solve the equation
@@ -164,6 +196,7 @@ void advect(int b,float* current,float* previous,float* u,float* v,float dt){
  * Laplacian p = (...)/h^2 = Div u* = (...)/2h
  * multiply the h^2 to the right side of the equation
  */
+
 void project(float *u, float *v, float *p, float *div) {
     int i, j, k;
     float h = 1.0/(float)N;
@@ -205,6 +238,11 @@ void project(float *u, float *v, float *p, float *div) {
     setBnd(2, v);
 }
 
+
+
+
+
+
 /**
  * Update the density during a step of dt
  * @param x0: the given force or source
@@ -212,6 +250,7 @@ void project(float *u, float *v, float *p, float *div) {
  * @param u: first component of velocity
  * @param v: second component of velocity
  */
+
 void densStep(float* x[], float* x0[], float* u, float* v, float diff, float dt) {
     
     for (int m=0; m<3; m++) {
@@ -224,6 +263,10 @@ void densStep(float* x[], float* x0[], float* u, float* v, float diff, float dt)
     }
 }
 
+
+
+
+
 /**
  * Update the velocity field during a step of dt
  * @param u0, v0: the given velocity field
@@ -231,6 +274,7 @@ void densStep(float* x[], float* x0[], float* u, float* v, float diff, float dt)
  * @param dt: time step interval
  * @param visc: viscosity coefficient
  */
+
 void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     
     //// update the velocity field
@@ -265,6 +309,9 @@ void velStep(float *u, float *v, float *u0, float *v0, float visc, float dt) {
     memcpy(u0, u, sizeof(float)*M_SIZE);
     memcpy(v0, v, sizeof(float)*M_SIZE);
 }
+
+
+
 
 
 
@@ -320,6 +367,9 @@ void reshape(int w,int h) {
     xmult = w/(GLfloat)N;
     ymult = h/(GLfloat)N;
 }
+
+
+
 
 
 
@@ -388,6 +438,10 @@ void mouseMove(int x,int y) {
     mouseOldX = x;
     mouseOldY = y;
 }
+
+
+
+
 
 int main(int argc, char* argv[]) {
     int i, j;
